@@ -1,4 +1,3 @@
-import os
 #!/usr/bin/env python3
 """
 Tecno Squire Bot — Gateway persistente
@@ -19,7 +18,7 @@ logging.basicConfig(
     ]
 )
 
-TOKEN        = "os.environ.get("DISCORD_TOKEN", "")"
+TOKEN        = os.environ.get("DISCORD_TOKEN", "")
 GUILD_ID     = 1489363760375398480
 MIEMBRO_ROLE = 1489378924705218631   # @Miembro
 BIENVENIDA_CH = 1489378952916742154  # #👋-bienvenida (se detecta en on_ready)

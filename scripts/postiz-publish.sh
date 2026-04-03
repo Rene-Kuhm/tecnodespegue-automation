@@ -1,5 +1,5 @@
 #!/bin/bash
-export POSTIZ_API_KEY=${POSTIZ_API_KEY}
+export POSTIZ_API_KEY="${POSTIZ_API_KEY}"
 export PATH="/home/node/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 INSTAGRAM="cmnhl2fg5058nql0ywse1qtqp"
 FACEBOOK="cmnhl37kl053gpn0yxb2169oz"

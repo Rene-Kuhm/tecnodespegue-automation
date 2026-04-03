@@ -3,7 +3,21 @@ import json
 import subprocess, sys, json, urllib.request, urllib.error, os, base64, re, random
 from datetime import datetime, timezone, timedelta
 
+# Multi-agent & trending modules
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from trending import get_trending_context, select_trending_topic
+    from crew import generate_post_multiagent
+    MULTIAGENT_AVAILABLE = True
+    print("[modules] trending + crew loaded")
+except ImportError as e:
+    MULTIAGENT_AVAILABLE = False
+    print(f"[modules] fallback mode: {e}")
+
 OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+if not OPENROUTER_KEY:
+    print("[ERROR] OPENROUTER_API_KEY no configurada. Abortando.")
+    import sys; sys.exit(1)
 POSTIZ_KEY     = os.environ.get("POSTIZ_API_KEY", "")
 DISCORD_TOKEN  = os.environ.get("DISCORD_TOKEN", "")
 OBSIDIAN_VAULT = "/home/node/clawd/brain"
@@ -461,31 +475,64 @@ def save_to_obsidian(content_type, post_text, media_url=None):
 
 # ─── 1. TEXTO ─────────────────────────────────────────────────────────────
 print(f"[{content_type}] Generando texto profesional...")
-# Build prompt with real GitHub context
-_user_prompt = style
-if github_ctx:
-    _gh_section = (
-        "TRABAJO REAL DE TECNODESPEGUE:\n" + github_ctx +
-        "\n\nUSO DE ESTE CONTEXTO: si hay un proyecto relevante mencionado arriba, "
-        "usalo como ejemplo concreto de lo que TecnoDespegue construye para clientes. "
-        "No menciones nombres tecnicos internos ni repos. "
-        "Transformalo en lenguaje de negocio: 'construimos un sistema de X para una empresa de Y sector'. "
-        "Esto hace el post autentico y especifico, no generico.\n\n"
-    )
-    _topic_extra = ("Enfoque del post: " + str(topic) + "\n\n") if topic else ""
-    _user_prompt = _gh_section + _topic_extra + style
-elif topic:
-    _user_prompt = "Tema: " + str(topic) + "\n\n" + style
 
-text_data = call_api("chat/completions", {
-    "model": COPY_MODEL,
-    "messages": [
-        {"role": "system", "content": AGENCY_CONTEXT},
-        {"role": "user",   "content": _user_prompt + "\n\nResponde SOLO con el texto del post. Sin markdown, sin asteriscos, sin titulos. Minimo 120 palabras, maximo 180."}
-    ],
-    "max_tokens": 600
-})
-post_text = clean_text(text_from_msg(text_data["choices"][0]["message"]))
+# Fetch trending context
+trends_ctx = ""
+trending_topic = None
+try:
+    from trending import get_trending_context, select_trending_topic
+    trends_ctx = get_trending_context()
+    if trends_ctx:
+        trending_topic = select_trending_topic(trends_ctx, content_type, OPENROUTER_KEY)
+except Exception as e:
+    print(f"  Trending unavailable: {e}")
+
+# Use multi-agent pipeline if available
+_multiagent_ok = False
+try:
+    from crew import generate_post_multiagent
+    _style_with_topic = style
+    if topic:
+        _style_with_topic = "Tema: " + str(topic) + "\n\n" + style
+    if trending_topic:
+        _style_with_topic = "TRENDING TOPIC DE HOY: " + str(trending_topic) + "\n\n" + _style_with_topic
+    
+    post_text = generate_post_multiagent(
+        OPENROUTER_KEY, content_type, _style_with_topic, AGENCY_CONTEXT,
+        trends_ctx=trends_ctx, github_ctx=github_ctx or ""
+    )
+    post_text = clean_text(post_text)
+    _multiagent_ok = True
+    print(f"  [Multi-agente] Texto final: {len(post_text.split())} palabras")
+except Exception as e:
+    print(f"  Multi-agente fallo ({e}), usando pipeline simple...")
+
+if not _multiagent_ok:
+    _user_prompt = style
+    if github_ctx:
+        _gh_section = (
+            "TRABAJO REAL DE TECNODESPEGUE:\n" + github_ctx +
+            "\n\nUSO DE ESTE CONTEXTO: si hay un proyecto relevante mencionado arriba, "
+            "usalo como ejemplo concreto de lo que TecnoDespegue construye para clientes. "
+            "No menciones nombres tecnicos internos ni repos. "
+            "Transformalo en lenguaje de negocio: 'construimos un sistema de X para una empresa de Y sector'. "
+            "Esto hace el post autentico y especifico, no generico.\n\n"
+        )
+        _topic_extra = ("Enfoque del post: " + str(topic) + "\n\n") if topic else ""
+        _user_prompt = _gh_section + _topic_extra + style
+    elif topic:
+        _user_prompt = "Tema: " + str(topic) + "\n\n" + style
+
+    text_data = call_api("chat/completions", {
+        "model": COPY_MODEL,
+        "messages": [
+            {"role": "system", "content": AGENCY_CONTEXT},
+            {"role": "user",   "content": _user_prompt + "\n\nResponde SOLO con el texto del post. Sin markdown, sin asteriscos, sin titulos. Minimo 120 palabras, maximo 180."}
+        ],
+        "max_tokens": 600
+    })
+    post_text = clean_text(text_from_msg(text_data["choices"][0]["message"]))
+
 if not post_text or len(post_text.split()) < 20:
     raise ValueError(f"Modelo no genero texto suficiente: {post_text[:50]!r}")
 print(f"Texto ({len(post_text.split())} palabras): {post_text[:100]}...")

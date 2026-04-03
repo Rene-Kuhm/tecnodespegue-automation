@@ -3,7 +3,7 @@
 import subprocess, sys, os, json, re
 from datetime import datetime, timezone, timedelta
 
-POSTIZ_KEY = "os.environ["POSTIZ_API_KEY"]"
+POSTIZ_KEY = os.environ.get("POSTIZ_API_KEY", "")
 NPM_BIN    = "/home/node/.npm-global/bin"
 POSTIZ_BIN = f"{NPM_BIN}/postiz"
 ENV = {**os.environ, "POSTIZ_API_KEY": POSTIZ_KEY, "PATH": f"{NPM_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
