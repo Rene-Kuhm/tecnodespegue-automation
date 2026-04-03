@@ -71,12 +71,13 @@ def fetch_github_trending():
         )
         with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read())
+        items = data.get("items") or []
         return [{
-            "name": r["full_name"],
-            "description": r.get("description", "")[:100],
-            "stars": r["stargazers_count"],
-            "language": r.get("language", "N/A"),
-        } for r in data.get("items", [])[:8]]
+            "name": r.get("full_name", ""),
+            "description": (r.get("description") or "")[:100],
+            "stars": r.get("stargazers_count", 0),
+            "language": r.get("language") or "N/A",
+        } for r in items[:8] if r.get("full_name")]
     except Exception as e:
         print(f"  GitHub trending error: {e}")
         return []
